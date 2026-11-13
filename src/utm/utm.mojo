@@ -2,7 +2,9 @@ import std.math as math
 from std.math import sqrt, sin, cos, floor
 
 
-struct Ellipsoid[dtype: DType](Copyable) where dtype.is_floating_point():
+struct Ellipsoid[dtype: DType](
+    ImplicitlyCopyable
+) where dtype.is_floating_point():
     """Ellipsoid parameters."""
 
     comptime T = Scalar[Self.dtype]
@@ -27,6 +29,20 @@ struct Ellipsoid[dtype: DType](Copyable) where dtype.is_floating_point():
         self.e2 = self.f * (2 - self.f)
         self.ep2 = self.e2 / (1 - self.e2)
         self.n = (a - b) / (a + b)
+
+    @staticmethod
+    def from_af(a: Self.T, f_inv: Self.T) -> Self:
+        """Creates an ellipsoid from semi-major axis and inverse flattening.
+
+        Args:
+            a: The semi-major axis, in meters.
+            f_inv: The inverse flattening `1 / f` (for example, `298.257223563`
+                for WGS 84).
+
+        Returns:
+            A new `Ellipsoid` with all derived parameters computed.
+        """
+        return Self(a, a - a / f_inv)
 
     def _curv(self, phi: Self.T) -> Tuple[Self.T, Self.T]:
         """Get radius of curvature.
@@ -112,36 +128,13 @@ struct Utm:
         return (Int(floor(lon)) - Utm.LON_MIN) / Utm.ZONE_WIDTH
 
 
-def geo_to_grid_simplified[
-    dtype: DType, //
-](
-    lat: Scalar[dtype],
-    lon: Scalar[dtype],
-    *,
-    ellipsoid: Ellipsoid[dtype] = wgs84,
-) raises -> Tuple[
-    Int,
-    Scalar[dtype],
-    Scalar[dtype],
-] where dtype.is_floating_point():
-    """Convert geographic coordinates to UTM grid coordinates.
-
-    Like `geo_to_grid`, but omits the meridian convergence and
-    point scale factor, saving their series expansions. Returns
-    (zone, northing, easting); see `geo_to_grid` for argument
-    and return-value semantics.
-    """
-
-    return _geo_to_grid[complete=False](lat, lon, ellipsoid=ellipsoid)
-
-
 def geo_to_grid[
     dtype: DType, //
 ](
     lat: Scalar[dtype],
     lon: Scalar[dtype],
     *,
-    ellipsoid: Ellipsoid[dtype] = wgs84,
+    ellipsoid: Ellipsoid[dtype] = wgs84[dtype],
 ) raises -> Tuple[
     Int,
     Scalar[dtype],
@@ -180,6 +173,29 @@ def geo_to_grid[
     return _geo_to_grid[complete=True](lat, lon, ellipsoid=ellipsoid)
 
 
+def geo_to_grid_simplified[
+    dtype: DType, //
+](
+    lat: Scalar[dtype],
+    lon: Scalar[dtype],
+    *,
+    ellipsoid: Ellipsoid[dtype] = wgs84[dtype],
+) raises -> Tuple[
+    Int,
+    Scalar[dtype],
+    Scalar[dtype],
+] where dtype.is_floating_point():
+    """Convert geographic coordinates to UTM grid coordinates.
+
+    Like `geo_to_grid`, but omits the meridian convergence and
+    point scale factor, saving their series expansions. Returns
+    (zone, northing, easting); see `geo_to_grid` for argument
+    and return-value semantics.
+    """
+
+    return _geo_to_grid[complete=False](lat, lon, ellipsoid=ellipsoid)
+
+
 comptime _GridResult[dtype: DType, complete: Bool] = Tuple[
     Int,
     Scalar[dtype],
@@ -202,7 +218,7 @@ def _geo_to_grid[
     lat: Scalar[dtype],
     lon: Scalar[dtype],
     *,  # Keyword-only
-    ellipsoid: Ellipsoid[dtype] = wgs84,
+    ellipsoid: Ellipsoid[dtype],
 ) raises -> _GridResult[dtype, complete] where dtype.is_floating_point():
     if lat < Utm.LAT_MIN or lat > Utm.LAT_MAX:
         raise "invalid latitude"
@@ -393,7 +409,7 @@ def grid_to_geo[
     E: Scalar[dtype],
     *,  # Keyword-only
     northern: Bool,
-    ellipsoid: Ellipsoid[dtype] = wgs84,
+    ellipsoid: Ellipsoid[dtype] = wgs84[dtype],
 ) raises -> Tuple[
     Scalar[dtype],
     Scalar[dtype],
@@ -432,7 +448,7 @@ def grid_to_geo_simplified[
     E: Scalar[dtype],
     *,  # Keyword-only
     northern: Bool,
-    ellipsoid: Ellipsoid[dtype] = wgs84,
+    ellipsoid: Ellipsoid[dtype] = wgs84[dtype],
 ) raises -> Tuple[
     Scalar[dtype],
     Scalar[dtype],
@@ -470,7 +486,7 @@ def _grid_to_geo[
     E: Scalar[dtype],
     *,  # Keyword-only
     northern: Bool,
-    ellipsoid: Ellipsoid[dtype] = wgs84,
+    ellipsoid: Ellipsoid[dtype],
 ) raises -> _GeoResult[dtype, complete] where dtype.is_floating_point():
     if zone < 1 or zone > 60:
         raise "invalid zone"

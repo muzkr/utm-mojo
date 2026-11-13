@@ -149,9 +149,8 @@ def _test_grid_to_geo(
     C: Float32,
     k: Float32,
 ) raises:
-    ref e = global_constant[ellipsoid]()
     var lat1, lon1, C1, k1 = utm.grid_to_geo(
-        zone, N, E, northern=northern, ellipsoid=e
+        zone, N, E, northern=northern, ellipsoid=materialize[ellipsoid]()
     )
 
     assert_almost_equal(lat1, lat, atol=_degrees(0, 0, 1).cast[.float64]())
